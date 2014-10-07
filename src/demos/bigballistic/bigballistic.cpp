@@ -17,6 +17,9 @@
 
 #include <stdio.h>
 
+#define DEG_TO_RAD 3.1415926 / 180.0;
+#define RAD_TO_DEG 180.0 / 3.1415926;
+
 enum ShotType
 {
     UNUSED = 0,
@@ -60,9 +63,9 @@ public:
     {
         type = shotType;
 
-		cyclone::real orientationRad = orientation * 3.14f / 180.0f;
+		cyclone::real orientationRad = orientation * DEG_TO_RAD;
 
-		cyclone::Quaternion quat = cyclone::Quaternion(orientationRad, 1, 0, 0);
+		cyclone::Quaternion quat = cyclone::Quaternion(orientationRad, -1, 0, 0);
 		cyclone::Matrix4 mat = cyclone::Matrix4();
 		mat.setOrientationAndPos(quat, cyclone::Vector3(0, 0, 0));
 
@@ -73,7 +76,7 @@ public:
         switch(type)
         {
         case PISTOL:
-			dir = dir * 10.0f;
+			dir = dir * 25.0f;
             body->setMass(1.5f);
             body->setVelocity(dir.x, dir.y, dir.z);
             body->setAcceleration(0.0f, -9.8f, 0.0f);
@@ -247,7 +250,7 @@ public:
 BigBallisticDemo::BigBallisticDemo()
 : 
 RigidBodyApplication(),
-currentShotType(LASER),
+currentShotType(PISTOL),
 orientation(0)
 {
     pauseSimulation = false;
@@ -356,7 +359,7 @@ void BigBallisticDemo::display()
     glutSolidSphere(0.1f, 5, 5);
 
 	glPushMatrix();
-	glRotatef(orientation, 1, 0, 0);
+	glRotatef(orientation * -1.0f, 1, 0, 0);
 	glBegin(GL_LINES);
 	glVertex3f(0, 0, 0);
 	glVertex3f(0, 0, 10);
@@ -406,6 +409,11 @@ void BigBallisticDemo::display()
 
     // Render the description
     glColor3f(0.0f, 0.0f, 0.0f);
+
+	char angle[10];
+	sprintf(angle, "%f", orientation);
+	renderText(10.0f, 50.0f, angle);
+
     renderText(10.0f, 34.0f, "Click: Fire\n1-4: Select Ammo");
 
     // Render the name of the current shot type
@@ -476,13 +484,13 @@ void BigBallisticDemo::key(unsigned char key)
 
 	case 'w':
 		{
-			orientation -= 1.0f;
+			orientation += 1.0f;
 		}
 		break;
 
 	case 's':
 		{
-			orientation += 1.0f;
+			orientation -= 1.0f;
 		}
 		break;
     }
