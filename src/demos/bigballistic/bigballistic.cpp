@@ -29,6 +29,13 @@ enum ShotType
     LASER
 };
 
+enum CameraPosState
+{
+	LEFT,
+	RIGHT,
+	IN_TRANSITION
+};
+
 class AmmoRound : public cyclone::CollisionSphere
 {
 public:
@@ -59,17 +66,28 @@ public:
     }
 
     /** Sets the box to a specific location. */
-    void setState(ShotType shotType, float orientation)
+	void setState(ShotType shotType, float orientation, CameraPosState state)
     {
         type = shotType;
 
+		cyclone::Vector3 dir;
+		cyclone::Quaternion quat;
+		cyclone::Matrix4 mat = cyclone::Matrix4();
 		cyclone::real orientationRad = orientation * DEG_TO_RAD;
 
-		cyclone::Quaternion quat = cyclone::Quaternion(orientationRad, -1, 0, 0);
-		cyclone::Matrix4 mat = cyclone::Matrix4();
-		mat.setOrientationAndPos(quat, cyclone::Vector3(0, 0, 0));
-
-		cyclone::Vector3 dir = cyclone::Vector3(0, 0, -1);
+		switch (state)
+		{
+		case LEFT:
+			dir = cyclone::Vector3(0, 0, -1);
+			quat = cyclone::Quaternion(orientationRad, -1, 0, 0);
+			mat.setOrientationAndPos(quat, cyclone::Vector3(0, 0, 0));
+			break;
+		case RIGHT:
+			dir = cyclone::Vector3(0, 0, 1);
+			quat = cyclone::Quaternion(orientationRad, 1, 0, 0);
+			mat.setOrientationAndPos(quat, cyclone::Vector3(0, 0, 0));
+			break;
+		}
 		dir = mat.transformDirection(dir);
 
         // Set the properties of the particle
@@ -121,7 +139,15 @@ public:
         body->setInertiaTensor(tensor);
 
         // Set the data common to all particle types
-        body->setPosition(0.0f, 1.5f, 0.0f);
+		switch (state)
+		{
+		case LEFT:
+			body->setPosition(0.0f, 1.5f, 0.0f);
+			break;
+		case RIGHT:
+			body->setPosition(0.0f, 1.5f, 99.0f);
+			break;
+		}
         startTime = TimingData::get().lastFrameTimestamp;
 
         // Clear the force accumulators
@@ -212,7 +238,30 @@ class BigBallisticDemo : public RigidBodyApplication
     /** Holds the current shot type. */
     ShotType currentShotType;
 
-	float orientation;
+	float orientationLeft;
+	float orientationRight;
+
+	cyclone::Vector3 leftCamPos;
+	cyclone::Vector3 leftCamLook;
+	cyclone::Vector3 rightCamPos;
+	cyclone::Vector3 rightCamLook;
+
+	cyclone::Vector3 currentCamPos;
+	cyclone::Vector3 currentCamLook;
+
+	cyclone::Vector3 fromPos;
+	cyclone::Vector3 toPos;
+	cyclone::Vector3 fromLook;
+	cyclone::Vector3 toLook;
+
+	cyclone::Vector3 leftPlayerPos;
+	cyclone::Vector3 rightPlayerPos;
+
+	float currentTransitionTime;
+	float transitionTime;
+
+	CameraPosState camPosState;
+	CameraPosState lastPosState;
 
     /** Resets the position of all the boxes and primes the explosion. */
     virtual void reset();
@@ -251,7 +300,8 @@ BigBallisticDemo::BigBallisticDemo()
 : 
 RigidBodyApplication(),
 currentShotType(PISTOL),
-orientation(0)
+orientationLeft(0),
+orientationRight(0)
 {
     pauseSimulation = false;
     reset();
@@ -279,13 +329,35 @@ void BigBallisticDemo::reset()
         shot->type = UNUSED;
     }
 
+	camPosState = CameraPosState::LEFT;
+	lastPosState = CameraPosState::LEFT;
+
+	currentTransitionTime = 0.0;
+	transitionTime = 2.0;
+
+	leftCamPos = cyclone::Vector3(-25.0, 8.0, 5.0);
+	leftCamLook = cyclone::Vector3(0.0, 5.0, 22.0);
+
+	rightCamPos = cyclone::Vector3(-25.0, 8.0, 95.0);
+	rightCamLook = cyclone::Vector3(0.0, 5.0, 82);
+
+	currentCamPos = leftCamPos;
+	currentCamLook = leftCamLook;
+
+	fromPos = cyclone::Vector3();
+	toPos = cyclone::Vector3();
+	fromLook = cyclone::Vector3();
+	toLook = cyclone::Vector3();
+
     // Initialise the box
     cyclone::real z = 20.0f;
-    for (Box *box = boxData; box < boxData+boxes; box++)
+    /*for (Box *box = boxData; box < boxData+boxes; box++)
     {
         box->setState(z);
         z += 90.0f;
-    }
+    }*/
+	boxData[0].setState(-1);
+	boxData[1].setState(100);
 }
 
 const char* BigBallisticDemo::getTitle()
@@ -306,8 +378,29 @@ void BigBallisticDemo::fire()
     if (shot >= ammo+ammoRounds) return;
 
     // Set the shot
-    shot->setState(currentShotType, orientation);
+	shot->setState(currentShotType, orientationLeft, camPosState);
 
+	camPosState = CameraPosState::IN_TRANSITION;
+
+	switch (lastPosState)
+	{
+	case LEFT:
+		fromPos = leftCamPos;
+		toPos = rightCamPos;
+		fromLook = leftCamLook;
+		toLook = rightCamLook;
+		break;
+	case RIGHT:
+		fromPos = rightCamPos;
+		toPos = leftCamPos;
+		fromLook = rightCamLook;
+		toLook = leftCamLook;
+		break;
+	case IN_TRANSITION:
+		break;
+	default:
+		break;
+	}
 }
 
 void BigBallisticDemo::updateObjects(cyclone::real duration)
@@ -340,6 +433,38 @@ void BigBallisticDemo::updateObjects(cyclone::real duration)
         box->body->integrate(duration);
         box->calculateInternals();
     }
+
+	if (camPosState == CameraPosState::IN_TRANSITION)
+	{
+		currentTransitionTime += duration;
+
+		cyclone::Vector3 posDiff = toPos - fromPos;
+		cyclone::Vector3 lookDiff = toLook - fromLook;
+
+		currentCamPos = fromPos + posDiff * (currentTransitionTime / transitionTime);
+		currentCamLook = fromLook + lookDiff * (currentTransitionTime / transitionTime);
+
+		if (currentTransitionTime >= transitionTime)
+		{
+			currentTransitionTime = 0.0;
+
+			switch (lastPosState)
+			{
+			case LEFT:
+				camPosState = CameraPosState::RIGHT;
+				lastPosState = camPosState;
+				break;
+			case RIGHT:
+				camPosState = CameraPosState::LEFT;
+				lastPosState = camPosState;
+				break;
+			case IN_TRANSITION:
+				break;
+			default:
+				break;
+			}
+		}
+	}
 }
 
 void BigBallisticDemo::display()
@@ -349,7 +474,7 @@ void BigBallisticDemo::display()
     // Clear the viewport and set the camera direction
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glLoadIdentity();
-    gluLookAt(-25.0, 8.0, 5.0,  0.0, 5.0, 22.0,  0.0, 1.0, 0.0);
+	gluLookAt(currentCamPos.x, currentCamPos.y, currentCamPos.z, currentCamLook.x, currentCamLook.y, currentCamLook.z,  0.0, 1.0, 0.0);
 
     // Draw a sphere at the firing point, and add a shadow projected
     // onto the ground plane.
@@ -359,10 +484,22 @@ void BigBallisticDemo::display()
     glutSolidSphere(0.1f, 5, 5);
 
 	glPushMatrix();
-	glRotatef(orientation * -1.0f, 1, 0, 0);
-	glBegin(GL_LINES);
-	glVertex3f(0, 0, 0);
-	glVertex3f(0, 0, 10);
+	switch (camPosState)
+	{
+	case LEFT:
+		glRotatef(orientationLeft * -1.0f, 1, 0, 0);
+		glBegin(GL_LINES);
+		glVertex3f(0, 0, 0);
+		glVertex3f(0, 0, 10);
+		break;
+	case RIGHT:
+		glTranslatef(0.0f, 0.0, 99);
+		glRotatef(orientationRight * -1.0f, 1, 0, 0);
+		glBegin(GL_LINES);
+		glVertex3f(0, 0, 0);
+		glVertex3f(0, 0, -10);
+		break;
+	}
 	glEnd();
 	glPopMatrix();
 
@@ -411,8 +548,20 @@ void BigBallisticDemo::display()
     glColor3f(0.0f, 0.0f, 0.0f);
 
 	char angle[10];
-	sprintf(angle, "%f", orientation);
-	renderText(10.0f, 50.0f, angle);
+	switch (camPosState)
+	{
+	case LEFT:
+		sprintf(angle, "%f", orientationLeft);
+		renderText(10.0f, 50.0f, angle);
+		break;
+	case RIGHT:
+		sprintf(angle, "%f", orientationRight * -1.0f);
+		renderText(10.0f, 50.0f, angle);
+		break;
+	case IN_TRANSITION:
+		renderText(10.0f, 50.0f, "IN TRANSITION");
+		break;
+	}
 
     renderText(10.0f, 34.0f, "Click: Fire\n1-4: Select Ammo");
 
@@ -484,13 +633,27 @@ void BigBallisticDemo::key(unsigned char key)
 
 	case 'w':
 		{
-			orientation += 1.0f;
+			if (camPosState == CameraPosState::LEFT)
+			{
+				orientationLeft += 1.0f;
+			}
+			else if (camPosState == CameraPosState::RIGHT)
+			{
+				orientationRight -= 1.0f;
+			}
 		}
 		break;
 
 	case 's':
 		{
-			orientation -= 1.0f;
+			if (camPosState == CameraPosState::LEFT)
+			{
+				orientationLeft -= 1.0f;
+			}
+			else if (camPosState == CameraPosState::RIGHT)
+			{
+				orientationRight += 1.0f;
+			}
 		}
 		break;
     }
