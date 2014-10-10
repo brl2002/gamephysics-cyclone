@@ -159,6 +159,8 @@ public:
 class Box : public cyclone::CollisionBox
 {
 public:
+	cyclone::Vector3 color;
+
     Box()
     {
         body = new cyclone::RigidBody;
@@ -186,7 +188,9 @@ public:
     /** Sets the box to a specific location. */
     void setState(cyclone::real z)
     {
-        body->setPosition(0, 3, z);
+		color = cyclone::Vector3(1, 0, 0);
+
+        body->setPosition(0, 0.5, z);
         body->setOrientation(1,0,0,0);
         body->setVelocity(0,0,0);
         body->setRotation(cyclone::Vector3(0,0,0));
@@ -199,8 +203,8 @@ public:
         tensor.setBlockInertiaTensor(halfSize, mass);
         body->setInertiaTensor(tensor);
 
-        body->setLinearDamping(0.95f);
-        body->setAngularDamping(0.8f);
+        body->setLinearDamping(0.0f);
+        body->setAngularDamping(0.0f);
         body->clearAccumulators();
         body->setAcceleration(0,-10.0f,0);
 
@@ -356,8 +360,8 @@ void BigBallisticDemo::reset()
         box->setState(z);
         z += 90.0f;
     }*/
-	boxData[0].setState(-1);
-	boxData[1].setState(100);
+	boxData[0].setState(-1.2);
+	boxData[1].setState(100.2);
 }
 
 const char* BigBallisticDemo::getTitle()
@@ -535,9 +539,9 @@ void BigBallisticDemo::display()
     glLightfv(GL_LIGHT0, GL_POSITION, lightPosition);
     glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE);
     glEnable(GL_COLOR_MATERIAL);
-    glColor3f(1,0,0);
     for (Box *box = boxData; box < boxData+boxes; box++)
     {
+		glColor3f(box->color.x,box->color.y,box->color.z);
         box->render();
     }
     glDisable(GL_COLOR_MATERIAL);
@@ -606,6 +610,7 @@ void BigBallisticDemo::generateContacts()
                 if (cyclone::CollisionDetector::boxAndSphere(*box, *shot, &cData))
                 {
                     shot->type = UNUSED;
+					box->color = cyclone::Vector3(0, 0, 1);
                 }
             }
         }
