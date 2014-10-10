@@ -102,6 +102,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\include\custom\Profiler.cpp" />
     <ClCompile Include="..\src\demos\bigballistic\bigballistic.cpp" />
     <ClCompile Include="..\src\demos\app.cpp" />
     <ClCompile Include="..\src\demos\main.cpp">
