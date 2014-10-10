@@ -38,5 +38,8 @@
     <ClInclude Include="..\src\demos\timing.h">
       <Filter>Common Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\custom\Profiler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

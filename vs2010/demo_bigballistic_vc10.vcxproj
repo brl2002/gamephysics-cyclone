@@ -111,6 +111,7 @@
     <ClCompile Include="..\src\demos\timing.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\include\custom\Profiler.h" />
     <ClInclude Include="..\src\demos\app.h" />
     <ClInclude Include="..\src\demos\timing.h" />
   </ItemGroup>
